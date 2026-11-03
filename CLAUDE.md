@@ -40,6 +40,22 @@ Each step exists because of a measured sudo behaviour on macOS:
 - Do not combine `-A` with the Touch ID attempt. When `-A` is set, sudo calls the askpass program and skips `pam_tid`.
 - Do not combine `-k` with `-v`. Sudo then authenticates without writing a timestamp, and the `-n` run fails with `a password is required`.
 - Without a tty, sudo keys its timestamp by parent process. A second process with a different parent cannot reuse the credential, measured with `sudo -v` in one `sh` and `sudo -n true` in another. That is what keeps an agent's shell out of the window between steps 2 and 4.
+- Without a tty, `sudo -k` clears only its own parent's timestamp. Measured with `sudo -v` in one `sh`, `sudo -k` in a second `sh` after the first authenticated, then `sudo -n true` in the first, which still succeeded. That is why one request's steps 1 and 4 cannot break another request's run.
+
+## The queue
+
+Each `pkexec` writes a ticket named `<nanoseconds>-<pid>` to `~/Library/Caches/pkexec/queue/`. Its position is the count of older tickets whose pid is alive. Only the front ticket accepts input; waiting passes stack 24pt down-right behind it. A `pkexec` removes its ticket after authentication, so a long command does not hold the queue. A ticket left by a killed process is ignored and deleted, because its pid is dead.
+
+## Window rules
+
+- Use a `.nonactivatingPanel`. `NSApp.activate()` is cooperative and is refused when `pkexec` starts from a background shell, which leaves the window without key focus and breaks Escape.
+- Set `hidesOnDeactivate` to false, or the pass disappears when another app takes focus.
+- Let Tab and Space reach the execute button. Q chose this because Touch ID or the password still gates the run, and `/etc/pam.d/sudo_local` holds only `pam_tid`. Revisit if a rule there ever authenticates without a deliberate act, such as `pam_watchid`.
+- Unlock the execute button 0.6s after the pass reaches the front, so a click aimed at another window cannot approve a pass that just appeared.
+
+## Build output
+
+SwiftPM writes products to `.build/out/Products/<Debug|Release>/`, not `.build/debug/`. Use `swift build --show-bin-path` to find the binary.
 
 Touch ID needs `auth sufficient pam_tid.so` in `/etc/pam.d/sudo_local`.
 
@@ -57,6 +73,8 @@ An anti-phishing phrase stored in the Keychain was built and removed. The agent'
 - Escape every invisible character in the displayed argv with `$'...'` notation: controls, format characters such as U+202E, separators, private use, and unassigned code points.
 - Bind the cancel button to Escape. Never bind the execute button to Return.
 - Label the agent's message as a claim. The command line is the source of truth.
+- Show "No rule matched" when no rule matches. Never show a command as safe; the rules match strings and an obfuscated script passes them.
+- Split only a shell's `-c` script into numbered lines. Escape every other invisible character inside it as its own token.
 
 ## Exit codes
 

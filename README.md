@@ -6,11 +6,11 @@ Let an AI agent ask for root, and let a human decide.
 pkexec -m "Flush the DNS cache so the new hosts entry takes effect" dscacheutil -flushcache
 ```
 
-The agent runs `pkexec` with a reason. A window shows you the exact command, the agent's reason, which program asked, its working directory, and the time of the request. You approve with Touch ID, or with your password when Touch ID is unavailable. The command's output and exit code go back to the agent. The agent never sees your password and never keeps root afterwards.
+The agent runs `pkexec` with a reason. A window shows you the exact command, the agent's reason, which program asked, its working directory, and the time of the request. It flags recursive deletes, shell `-c` strings, and system paths. When several requests arrive at once, they queue as a stack and you answer them one at a time. You approve with Touch ID, or with your password when Touch ID is unavailable. The command's output and exit code go back to the agent. The agent never sees your password and never keeps root afterwards.
 
 ## Requirements
 
-- macOS 15 or later
+- macOS 26 or later
 - Swift 6 (Command Line Tools are enough)
 - Touch ID for sudo, enabled in `/etc/pam.d/sudo_local`:
 
@@ -22,7 +22,7 @@ The agent runs `pkexec` with a reason. A window shows you the exact command, the
 
 ```sh
 make test
-make build    # writes .build/release/pkexec
+make build    # writes the binary to `swift build -c release --show-bin-path`
 make install  # builds, then copies the binary to ~/.local/bin/pkexec
 ```
 
@@ -47,7 +47,7 @@ pkexec [-m message] <command> [args...]
 `pkexec` is for an honest agent that may be careless. It shows you exactly what will run, keeps your password away from the agent, and leaves no sudo credential behind.
 
 - The displayed argv escapes invisible characters, so a right-to-left override or an ANSI escape cannot hide part of the command.
-- The execute button does not respond to Return, so a burst of requests cannot be approved by a held key.
+- The execute button does not respond to Return, and unlocks 0.6s after its window reaches the front. Tab and Space can reach it, because Touch ID or the password still gates the run.
 - The sudo credential is keyed to the `pkexec` process, so another process cannot reuse it while the command runs.
 
 `pkexec` does not protect you from a malicious agent. An agent running as you can draw a lookalike window, and it can run `sudo -v` itself, which shows the same Touch ID prompt with no command attached. Approve a Touch ID prompt only right after a `pkexec` window you have read.
