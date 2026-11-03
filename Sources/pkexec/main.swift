@@ -3,91 +3,6 @@ import Darwin
 import PkexecCore
 import SwiftUI
 
-@MainActor
-func present<Result>(_ fallback: Result, _ content: (@escaping (Result) -> Void) -> some View) -> Result {
-    let app = NSApplication.shared
-    app.setActivationPolicy(.accessory)
-    var result = fallback
-    let panel = NSPanel(
-        contentRect: .zero, styleMask: [.titled, .fullSizeContentView],
-        backing: .buffered, defer: false)
-    panel.titlebarAppearsTransparent = true
-    panel.titleVisibility = .hidden
-    panel.level = .modalPanel
-    panel.contentView = NSHostingView(rootView: content { value in
-        result = value
-        app.stopModal()
-    })
-    panel.center()
-    app.activate()
-    app.runModal(for: panel)
-    panel.close()
-    return result
-}
-
-struct ConfirmView: View {
-    let command: String
-    let message: String?
-    let requester: String
-    let cwd: String
-    let requestedAt: String
-    let done: (Bool) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("以 root 執行").font(.title2.bold())
-            Text(command)
-                .font(.system(.title3, design: .monospaced))
-                .textSelection(.enabled)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary, in: .rect(cornerRadius: 8))
-            if let message {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Agent 聲稱").font(.caption).foregroundStyle(.secondary)
-                    Text(message)
-                }
-            }
-            Grid(alignment: .leading) {
-                GridRow { Text("請求者").foregroundStyle(.secondary); Text(requester) }
-                GridRow { Text("目錄").foregroundStyle(.secondary); Text(cwd) }
-                GridRow { Text("時間").foregroundStyle(.secondary); Text(requestedAt) }
-            }
-            .font(.caption)
-            HStack {
-                Spacer()
-                Button("取消") { done(false) }.keyboardShortcut(.cancelAction)
-                Button("執行") { done(true) }
-            }
-        }
-        .padding(24)
-        .frame(width: 560)
-    }
-}
-
-struct PasswordView: View {
-    let prompt: String
-    let done: (String?) -> Void
-    private final class Field { var text = "" }
-    private let field = Field()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Touch ID 無法使用，請輸入密碼").font(.title3.bold())
-            Text(prompt).font(.caption).foregroundStyle(.secondary)
-            SecureField("密碼", text: Binding(get: { field.text }, set: { field.text = $0 }))
-                .onSubmit { done(field.text) }
-            HStack {
-                Spacer()
-                Button("取消") { done(nil) }.keyboardShortcut(.cancelAction)
-                Button("送出") { done(field.text) }.keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(24)
-        .frame(width: 420)
-    }
-}
-
 func processPath(_ pid: pid_t) -> String {
     var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)
     let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
@@ -100,7 +15,21 @@ let env = ProcessInfo.processInfo.environment
 
 if env[askpassVariable] == "1" {
     let prompt = CommandLine.arguments.dropFirst().joined(separator: " ")
-    guard let password = MainActor.assumeIsolated({ present(nil) { PasswordView(prompt: prompt, done: $0) } }) else { exit(1) }
+    let password: String? = MainActor.assumeIsolated {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        var result: String?
+        let panel = makePanel(PasswordView(prompt: prompt) { value in
+            result = value
+            app.stopModal()
+        })
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.modalPanel.rawValue + 2)
+        panel.center()
+        app.runModal(for: panel)
+        panel.close()
+        return result
+    }
+    guard let password else { exit(1) }
     print(password)
     exit(0)
 }
@@ -123,20 +52,38 @@ else {
 }
 let arguments = Array(request.command.dropFirst())
 
-let approved = MainActor.assumeIsolated {
-    present(false) {
-        ConfirmView(
-            command: displayCommand([executable] + arguments), message: request.message,
-            requester: processPath(getppid()), cwd: cwd,
-            requestedAt: Date.now.formatted(date: .abbreviated, time: .standard), done: $0)
-    }
-}
-guard approved else {
-    FileHandle.standardError.write("pkexec: cancelled\n".data(using: .utf8)!)
-    exit(126)
+let queueDir = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Caches/pkexec/queue")
+let ticket = Ticket(time: clock_gettime_nsec_np(CLOCK_REALTIME), pid: getpid())
+let ticketURL = queueDir.appending(path: ticket.name)
+try? FileManager.default.createDirectory(at: queueDir, withIntermediateDirectories: true)
+FileManager.default.createFile(atPath: ticketURL.path, contents: nil)
+
+func isAlive(_ pid: Int32) -> Bool { kill(pid, 0) == 0 || errno == EPERM }
+
+@MainActor func readTickets() -> [Ticket] {
+    ((try? FileManager.default.contentsOfDirectory(atPath: queueDir.path)) ?? []).compactMap(Ticket.init(name:))
 }
 
-func sudo(_ step: SudoStep, quiet: Bool = false) -> Int32 {
+@MainActor func clearBatch(except keep: Ticket?) {
+    for old in readTickets() where old != keep {
+        try? FileManager.default.removeItem(at: queueDir.appending(path: old.done ? old.doneName : old.name))
+    }
+}
+
+@MainActor func readPosition() -> QueuePosition { queuePosition(of: ticket, among: readTickets(), isAlive: isAlive) }
+
+@MainActor func leaveQueue() {
+    try? FileManager.default.moveItem(at: ticketURL, to: queueDir.appending(path: ticket.doneName))
+    if isNewBatch(for: ticket, among: readTickets(), isAlive: isAlive) { clearBatch(except: nil) }
+}
+
+MainActor.assumeIsolated {
+    if isNewBatch(for: ticket, among: readTickets(), isAlive: isAlive) { clearBatch(except: ticket) }
+}
+
+let stackTop: CGFloat = 220
+
+func sudoProcess(_ step: SudoStep, quiet: Bool) -> Process {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
     process.arguments = step.arguments
@@ -148,16 +95,157 @@ func sudo(_ step: SudoStep, quiet: Bool = false) -> Int32 {
         process.standardInput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
     }
+    return process
+}
+
+func sudo(_ step: SudoStep, quiet: Bool = false) -> Int32 {
+    let process = sudoProcess(step, quiet: quiet)
     do { try process.run() } catch { return 1 }
     process.waitUntilExit()
     return process.terminationStatus
 }
 
-_ = sudo(.reset, quiet: true)
-guard sudo(.touchID, quiet: true) == 0 || sudo(.password, quiet: true) == 0 else {
+enum Outcome { case cancelled, failed, authenticated }
+
+let outcome = MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+    let argv = describe([executable] + arguments)
+    let found = rules(argv)
+    let state = PassState(position: readPosition())
+    var result = Outcome.cancelled
+    var onDone: (Bool) -> Void = { _ in }
+    let panel = makePanel(ConfirmView(
+        executable: executable, arguments: argv, rules: found, message: request.message,
+        requester: processPath(getppid()), requesterPID: getppid(), cwd: cwd,
+        requestedAt: .now, tilt: [-3.36, 2.52, -1.96, 3.64][Int(getpid()) % 4], state: state
+    ) { onDone($0) })
+    let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+
+    let screen = NSScreen.screens[0].visibleFrame
+    panel.setFrameTopLeftPoint(NSPoint(x: screen.midX - panel.frame.width / 2, y: screen.midY + stackTop + cardMargin + exitDistance))
+
+    @MainActor func place() {
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.modalPanel.rawValue - min(state.position.ahead, 3))
+        panel.ignoresMouseEvents = state.waiting
+        panel.acceptsKey = !state.waiting
+    }
+
+    @MainActor func depart(_ value: Outcome) {
+        result = value
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.modalPanel.rawValue + 1)
+        withAnimation(.easeIn(duration: reduceMotion ? 0 : 0.24)) { state.exitOffset = value == .authenticated ? -exitDistance : exitDistance }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 260))
+            app.stopModal()
+        }
+    }
+
+    var interrupted = false
+    var running: Process?
+    @MainActor func authenticate(_ step: SudoStep) async -> Bool {
+        guard !interrupted else { return false }
+        let process = sudoProcess(step, quiet: true)
+        running = process
+        let status = await withCheckedContinuation { done in
+            process.terminationHandler = { done.resume(returning: $0.terminationStatus) }
+            do { try process.run() } catch {
+                process.terminationHandler = nil
+                done.resume(returning: 1)
+            }
+        }
+        running = nil
+        return status == 0 && !interrupted
+    }
+
+    var leaving = false
+    @MainActor func leave(_ approved: Bool) {
+        guard !leaving else { return }
+        leaving = true
+        guard approved else { return depart(.cancelled) }
+        state.authenticating = true
+        panel.acceptsKey = false
+        Task { @MainActor in
+            _ = await authenticate(.reset)
+            let ok = await authenticate(.touchID) ? true : await authenticate(.password)
+            state.authenticating = false
+            depart(ok ? .authenticated : interrupted ? .cancelled : .failed)
+        }
+    }
+    onDone = leave
+
+    @MainActor func reachFront() {
+        panel.makeKeyAndOrderFront(nil)
+        let step = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 80
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            for n in found.indices {
+                try? await Task.sleep(for: .milliseconds(step))
+                withAnimation(.spring(duration: 0.3, bounce: 0.4)) { state.litRules = n + 1 }
+            }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            state.unlocked = true
+        }
+    }
+
+    place()
+    if state.waiting { panel.orderFrontRegardless() } else { reachFront() }
+    Task { @MainActor in
+        withAnimation(.spring(duration: 0.45, bounce: 0.35)) { state.shown = true }
+    }
+
+    let poll = Task { @MainActor in
+        place()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(250))
+            var position = readPosition()
+            guard position != state.position else { continue }
+            if position.ahead > 0 {
+                try? await Task.sleep(for: .milliseconds(300))
+                position = readPosition()
+            }
+            let wasWaiting = state.waiting
+            withAnimation(.spring(duration: 0.39, bounce: 0.66)) { state.position = position }
+            place()
+            if wasWaiting && !state.waiting { reachFront() }
+        }
+    }
+    let signals = [SIGINT, SIGTERM].map { number in
+        signal(number, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+        source.setEventHandler {
+            interrupted = true
+            running?.terminate()
+            if leaving { return }
+            leave(false)
+        }
+        source.resume()
+        return source
+    }
+    @MainActor func pump(until deadline: Date) {
+        if let event = app.nextEvent(matching: .any, until: deadline, inMode: .default, dequeue: true) { app.sendEvent(event) }
+    }
+    app.finishLaunching()
+    while state.waiting && !interrupted { pump(until: .now + 0.05) }
+    if !interrupted { app.runModal(for: panel) }
+    signals.forEach { $0.cancel() }
+    if interrupted && result != .authenticated { result = .cancelled }
+    poll.cancel()
+    panel.close()
+    return result
+}
+leaveQueue()
+switch outcome {
+case .cancelled:
+    FileHandle.standardError.write("pkexec: cancelled\n".data(using: .utf8)!)
+    exit(126)
+case .failed:
     FileHandle.standardError.write("pkexec: authentication failed\n".data(using: .utf8)!)
     exit(126)
+case .authenticated:
+    let status = sudo(.run(executable: executable, arguments: arguments))
+    _ = sudo(.reset, quiet: true)
+    exit(status)
 }
-let status = sudo(.run(executable: executable, arguments: arguments))
-_ = sudo(.reset, quiet: true)
-exit(status)
