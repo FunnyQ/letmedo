@@ -1,9 +1,9 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "pkexec",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v26)],
     targets: [
         .target(name: "PkexecCore"),
         .executableTarget(name: "pkexec", dependencies: ["PkexecCore"]),

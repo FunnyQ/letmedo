@@ -1,5 +1,5 @@
 PLUGINS := /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
-BIN := .build/release/pkexec
+BIN = $(shell swift build -c release --show-bin-path)/pkexec
 
 PREFIX := $(HOME)/.local
 
