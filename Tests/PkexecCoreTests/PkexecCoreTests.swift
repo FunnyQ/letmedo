@@ -194,3 +194,10 @@ import Testing
         #expect(SudoStep.reset.arguments == ["-k"])
     }
 }
+
+@Suite struct SkillTests {
+    @Test func skillIsAnAgentSkillWithFrontmatter() {
+        #expect(skill.hasPrefix("---\nname: pkexec\ndescription: "))
+        #expect(skill.hasSuffix("\n"))
+    }
+}

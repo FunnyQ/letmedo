@@ -34,6 +34,7 @@ pkexec [-m message] <command> [args...]
 
 - `-m message` is the agent's reason. The window labels it as a claim.
 - `<command>` is resolved through `PATH` to an absolute path, and the window shows that path.
+- `pkexec --skill` prints an agent skill that explains how to use `pkexec`. Install it with `pkexec --skill > ~/.claude/skills/pkexec/SKILL.md`.
 
 ## How it works
 

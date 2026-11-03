@@ -34,6 +34,11 @@ if env[askpassVariable] == "1" {
     exit(0)
 }
 
+if CommandLine.arguments.dropFirst().first == "--skill" {
+    print(skill, terminator: "")
+    exit(0)
+}
+
 let request: Request
 do {
     request = try parseRequest(Array(CommandLine.arguments.dropFirst()))
