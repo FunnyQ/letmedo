@@ -4,16 +4,17 @@ Guidance for Claude Code in this repository.
 
 ## What This Is
 
-`pkexec` for macOS: an agent asks to run a command as root, a SwiftUI window shows the human what will run and why, and the human approves with Touch ID or a password. It is for Q's own machine only, so it is signed with a self-signed certificate and never notarized.
+`pkexec` for macOS: an agent asks to run a command as root, a SwiftUI window shows the human what will run and why, and the human approves with Touch ID or a password. It is for Q's own machine only and is never notarized.
 
 - `Sources/PkexecCore/` holds the pure logic: argument parsing, PATH resolution, argv display, and the sudo steps. Every function here is unit-tested.
-- `Sources/pkexec/` holds the windows, the Keychain access, and the process orchestration. It has no unit tests; verify it end to end with the signed binary.
+- `Sources/pkexec/` holds the windows and the process orchestration. It has no unit tests; verify it end to end with the installed binary.
 
 ## Commands
 
 ```sh
 make test    # swift test with the Testing macro plugin path
-make build   # release build, signed as pkexec-local, then verified
+make build   # release build
+make install # build, then copy to ~/.local/bin/pkexec
 ```
 
 ## Toolchain
@@ -44,13 +45,11 @@ Touch ID needs `auth sufficient pam_tid.so` in `/etc/pam.d/sudo_local`.
 
 The password window runs as sudo's askpass program. `pkexec` sets `SUDO_ASKPASS` to its own path and `PKEXEC_ASKPASS=1`, and the binary enters askpass mode when it sees that variable.
 
-## Signing and the anti-phishing phrase
+## Threat model
 
-`make build` signs with the `pkexec-local` identity from the login keychain, under the identifier `cc.funnyq.pkexec`. The anti-phishing phrase is a generic password item (service `cc.funnyq.pkexec`, account `anti-phishing-phrase`) that the signed binary created. Its ACL trusts that signature, so any other program reading it gets a Keychain prompt or a refusal.
+`pkexec` protects Q from an honest but careless agent. It does not protect against a malicious one, and no feature should claim to.
 
-- Always build through `make build`. An unsigned or ad-hoc signed binary fails the ACL and shows the red "no phrase" warning.
-- Never pass the phrase through argv. `pkexec --setup` takes it in a window, so `ps` never shows it.
-- Never print the phrase in a test or a check. Measure its length instead.
+An anti-phishing phrase stored in the Keychain was built and removed. The agent's terminal holds Screen Recording permission, so a `screencapture` run from the agent's shell captured every window on screen, and any phrase drawn there would be readable. A self-signed binary has no Team ID, so the Keychain bound its ACL to the cdhash and prompted the real binary after every rebuild, the same prompt a fake would raise. A malicious agent can also run `sudo -v` directly and get the same Touch ID prompt with no command attached.
 
 ## Security rules
 

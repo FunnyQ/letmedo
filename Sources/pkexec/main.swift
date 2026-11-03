@@ -30,12 +30,11 @@ struct ConfirmView: View {
     let message: String?
     let requester: String
     let cwd: String
-    let phrase: String?
+    let requestedAt: String
     let done: (Bool) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PhraseBadge(phrase: phrase)
             Text("以 root 執行").font(.title2.bold())
             Text(command)
                 .font(.system(.title3, design: .monospaced))
@@ -52,6 +51,7 @@ struct ConfirmView: View {
             Grid(alignment: .leading) {
                 GridRow { Text("請求者").foregroundStyle(.secondary); Text(requester) }
                 GridRow { Text("目錄").foregroundStyle(.secondary); Text(cwd) }
+                GridRow { Text("時間").foregroundStyle(.secondary); Text(requestedAt) }
             }
             .font(.caption)
             HStack {
@@ -67,14 +67,12 @@ struct ConfirmView: View {
 
 struct PasswordView: View {
     let prompt: String
-    let phrase: String?
     let done: (String?) -> Void
     private final class Field { var text = "" }
     private let field = Field()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PhraseBadge(phrase: phrase)
             Text("Touch ID 無法使用，請輸入密碼").font(.title3.bold())
             Text(prompt).font(.caption).foregroundStyle(.secondary)
             SecureField("密碼", text: Binding(get: { field.text }, set: { field.text = $0 }))
@@ -100,21 +98,9 @@ func processPath(_ pid: pid_t) -> String {
 let askpassVariable = "PKEXEC_ASKPASS"
 let env = ProcessInfo.processInfo.environment
 
-if CommandLine.arguments.dropFirst() == ["--setup"] {
-    guard let phrase = MainActor.assumeIsolated({ present(nil) { SetupView(done: $0) } }) else { exit(1) }
-    let status = Phrase.write(phrase)
-    guard status == errSecSuccess else {
-        FileHandle.standardError.write("pkexec: keychain write failed (\(status))\n".data(using: .utf8)!)
-        exit(1)
-    }
-    print("pkexec: anti-phishing phrase saved")
-    exit(0)
-}
-
 if env[askpassVariable] == "1" {
     let prompt = CommandLine.arguments.dropFirst().joined(separator: " ")
-    let phrase = Phrase.read()
-    guard let password = MainActor.assumeIsolated({ present(nil) { PasswordView(prompt: prompt, phrase: phrase, done: $0) } }) else { exit(1) }
+    guard let password = MainActor.assumeIsolated({ present(nil) { PasswordView(prompt: prompt, done: $0) } }) else { exit(1) }
     print(password)
     exit(0)
 }
@@ -141,7 +127,8 @@ let approved = MainActor.assumeIsolated {
     present(false) {
         ConfirmView(
             command: displayCommand([executable] + arguments), message: request.message,
-            requester: processPath(getppid()), cwd: cwd, phrase: Phrase.read(), done: $0)
+            requester: processPath(getppid()), cwd: cwd,
+            requestedAt: Date.now.formatted(date: .abbreviated, time: .standard), done: $0)
     }
 }
 guard approved else {
