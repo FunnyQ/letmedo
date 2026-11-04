@@ -250,7 +250,17 @@ case .failed:
     FileHandle.standardError.write("pkexec: authentication failed\n".data(using: .utf8)!)
     exit(126)
 case .authenticated:
-    let status = sudo(.run(executable: executable, arguments: arguments))
+    let process = sudoProcess(.run(executable: executable, arguments: arguments), quiet: false)
+    do { try process.run() } catch { exit(1) }
+    let pid = process.processIdentifier
+    let relays = [SIGINT, SIGTERM].map { number in
+        let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
+        source.setEventHandler { @Sendable in kill(pid, number) }
+        source.resume()
+        return source
+    }
+    process.waitUntilExit()
+    relays.forEach { $0.cancel() }
     _ = sudo(.reset, quiet: true)
-    exit(status)
+    exit(process.terminationStatus)
 }

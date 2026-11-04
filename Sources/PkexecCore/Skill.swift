@@ -32,7 +32,7 @@ The binary lives at `~/.local/bin/pkexec`. When `command -v pkexec` finds nothin
 
 ## Waiting for the user
 
-The window has no timeout. The user may be away, so run `pkexec` with a long tool timeout or in the background. When your tool kills the call, `pkexec` receives SIGTERM, treats it as a cancel, and exits 126.
+The window has no timeout. The user may be away, so run `pkexec` with a long tool timeout or in the background. When your tool kills the call, `pkexec` receives SIGTERM. Before approval, `pkexec` treats it as a cancel and exits 126. After approval, `pkexec` passes SIGINT and SIGTERM on to the running command.
 
 ## Exit codes
 
