@@ -42,9 +42,13 @@ Each step exists because of a measured sudo behaviour on macOS:
 - Without a tty, sudo keys its timestamp by parent process. A second process with a different parent cannot reuse the credential, measured with `sudo -v` in one `sh` and `sudo -n true` in another. That is what keeps an agent's shell out of the window between steps 2 and 4.
 - Without a tty, `sudo -k` clears only its own parent's timestamp. Measured with `sudo -v` in one `sh`, `sudo -k` in a second `sh` after the first authenticated, then `sudo -n true` in the first, which still succeeded. That is why one request's steps 1 and 4 cannot break another request's run.
 
+During step 3, `pkexec` ignores SIGINT and SIGTERM itself and sends each one to the sudo process. Foundation's `Process` starts sudo in its own process group, so a kill aimed at the agent's process group never reaches sudo. Sudo relays a signal to the command only when the sender is outside sudo's process group, and `pkexec` is outside it.
+
 ## The queue
 
-Each `pkexec` writes a ticket named `<nanoseconds>-<pid>` to `~/Library/Caches/pkexec/queue/`. Its position is the count of older tickets whose pid is alive. Only the front ticket accepts input; waiting passes stack 24pt down-right behind it. A `pkexec` removes its ticket after authentication, so a long command does not hold the queue. A ticket left by a killed process is ignored and deleted, because its pid is dead.
+Each `pkexec` writes a ticket named `<nanoseconds>-<pid>` to `~/Library/Caches/pkexec/queue/`. A ticket is waiting while it has no `.done` suffix and its pid is alive. A pass waits while any older ticket is waiting. Only the front pass accepts input. Each waiting pass sits 24pt higher per waiting ticket ahead of it, capped at 3.
+
+After the window closes, `pkexec` renames its ticket to `<name>.done`, so a long command does not hold the queue. The badge shows `n / total`: `n` counts the older tickets plus one, and `total` counts every ticket in the directory, done ones included. When no other ticket is waiting, the batch is over. At start, `pkexec` then deletes every ticket except its own. After the window closes, `pkexec` then deletes every ticket, its own included. Both checks also delete tickets left by killed processes.
 
 ## Window rules
 
