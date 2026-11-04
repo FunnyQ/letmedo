@@ -2,6 +2,8 @@
 
 Let an AI agent ask for root, and let a human decide.
 
+![The approval window for a shell string that writes /etc/hosts and flushes the DNS cache](docs/screenshot.png)
+
 ```sh
 pkexec -m "Flush the DNS cache so the new hosts entry takes effect" dscacheutil -flushcache
 ```
