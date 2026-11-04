@@ -42,7 +42,7 @@ Each step exists because of a measured sudo behaviour on macOS:
 - Without a tty, sudo keys its timestamp by parent process. A second process with a different parent cannot reuse the credential, measured with `sudo -v` in one `sh` and `sudo -n true` in another. That is what keeps an agent's shell out of the window between steps 2 and 4.
 - Without a tty, `sudo -k` clears only its own parent's timestamp. Measured with `sudo -v` in one `sh`, `sudo -k` in a second `sh` after the first authenticated, then `sudo -n true` in the first, which still succeeded. That is why one request's steps 1 and 4 cannot break another request's run.
 
-During step 3, `letmedo` ignores SIGINT and SIGTERM itself and sends each one to the sudo process. Foundation's `Process` starts sudo in its own process group, so a kill aimed at the agent's process group never reaches sudo. Sudo relays a signal to the command only when the sender is outside sudo's process group, and `letmedo` is outside it.
+During step 3, `letmedo` ignores SIGHUP, SIGINT, and SIGTERM itself and sends each one to the sudo process. Foundation's `Process` starts sudo in its own process group, so a kill aimed at the agent's process group never reaches sudo. Sudo relays a signal to the command only when the sender is outside sudo's process group, and `letmedo` is outside it.
 
 ## The queue
 

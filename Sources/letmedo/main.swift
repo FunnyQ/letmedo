@@ -217,7 +217,7 @@ let outcome = MainActor.assumeIsolated {
             if wasWaiting && !state.waiting { reachFront() }
         }
     }
-    let signals = [SIGINT, SIGTERM].map { number in
+    let signals = [SIGHUP, SIGINT, SIGTERM].map { number in
         signal(number, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
         source.setEventHandler {
@@ -253,7 +253,7 @@ case .authenticated:
     let process = sudoProcess(.run(executable: executable, arguments: arguments), quiet: false)
     do { try process.run() } catch { exit(1) }
     let pid = process.processIdentifier
-    let relays = [SIGINT, SIGTERM].map { number in
+    let relays = [SIGHUP, SIGINT, SIGTERM].map { number in
         let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
         source.setEventHandler { @Sendable in kill(pid, number) }
         source.resume()

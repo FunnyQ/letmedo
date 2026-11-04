@@ -32,7 +32,7 @@ The binary lives at `~/.local/bin/letmedo`. When `command -v letmedo` finds noth
 
 ## Waiting for the user
 
-The window has no timeout. The user may be away, so run `letmedo` with a long tool timeout or in the background. When your tool kills the call, `letmedo` receives SIGTERM. Before approval, `letmedo` treats it as a cancel and exits 126. After approval, `letmedo` passes SIGINT and SIGTERM on to the running command.
+The window has no timeout. The user may be away, so run `letmedo` with a long tool timeout or in the background. When your tool kills the call, `letmedo` receives SIGTERM. Before approval, `letmedo` treats it as a cancel and exits 126. After approval, `letmedo` passes SIGHUP, SIGINT, and SIGTERM on to the running command.
 
 ## Exit codes
 
