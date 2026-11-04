@@ -1,5 +1,5 @@
 import Testing
-@testable import PkexecCore
+@testable import LetmedoCore
 
 @Suite struct DisplayTests {
     @Test func plainArgumentStaysBare() {
@@ -197,7 +197,7 @@ import Testing
 
 @Suite struct SkillTests {
     @Test func skillIsAnAgentSkillWithFrontmatter() {
-        #expect(skill.hasPrefix("---\nname: pkexec\ndescription: "))
+        #expect(skill.hasPrefix("---\nname: letmedo\ndescription: "))
         #expect(skill.hasSuffix("\n"))
     }
 }

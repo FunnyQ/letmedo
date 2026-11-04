@@ -1,5 +1,5 @@
 PLUGINS := /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
-BIN = $(shell swift build -c release --show-bin-path)/pkexec
+BIN = $(shell swift build -c release --show-bin-path)/letmedo
 
 PREFIX := $(HOME)/.local
 
@@ -13,4 +13,4 @@ build:
 
 install: build
 	install -d $(PREFIX)/bin
-	install -m 755 $(BIN) $(PREFIX)/bin/pkexec
+	install -m 755 $(BIN) $(PREFIX)/bin/letmedo

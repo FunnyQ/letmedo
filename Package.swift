@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "pkexec",
+    name: "letmedo",
     platforms: [.macOS(.v26)],
     targets: [
-        .target(name: "PkexecCore"),
-        .executableTarget(name: "pkexec", dependencies: ["PkexecCore"]),
-        .testTarget(name: "PkexecCoreTests", dependencies: ["PkexecCore"]),
+        .target(name: "LetmedoCore"),
+        .executableTarget(name: "letmedo", dependencies: ["LetmedoCore"]),
+        .testTarget(name: "LetmedoCoreTests", dependencies: ["LetmedoCore"]),
     ]
 )

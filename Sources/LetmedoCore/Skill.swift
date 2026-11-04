@@ -1,29 +1,29 @@
 public let skill = #"""
 ---
-name: pkexec
-description: Run a command as root on the user's Mac by asking the user through the pkexec approval window. Use whenever a task needs root or sudo — editing /etc, writing under /Library or /usr, launchctl for system daemons, flushing system caches, installing system files. Do NOT run sudo directly and do NOT ask the user for a password.
+name: letmedo
+description: Run a command as root on the user's Mac by asking the user through the letmedo approval window. Use whenever a task needs root or sudo — editing /etc, writing under /Library or /usr, launchctl for system daemons, flushing system caches, installing system files. Do NOT run sudo directly and do NOT ask the user for a password.
 ---
 
-# pkexec
+# letmedo
 
-`pkexec` shows the user a card with the exact command, your reason, your shell, your working directory, and the time. The user approves with Touch ID or a password. The command then runs as root, and its output and exit code come back to you.
+`letmedo` shows the user a card with the exact command, your reason, your shell, your working directory, and the time. The user approves with Touch ID or a password. The command then runs as root, and its output and exit code come back to you.
 
 ```sh
-pkexec -m "<why, in one sentence>" <command> [args...]
+letmedo -m "<why, in one sentence>" <command> [args...]
 ```
 
-The binary lives at `~/.local/bin/pkexec`. When `command -v pkexec` finds nothing, tell the user, who installs it with `make install` in the pkexec-mac repo. `pkexec --skill` prints this skill.
+The binary lives at `~/.local/bin/letmedo`. When `command -v letmedo` finds nothing, tell the user, who installs it with `make install` in the letmedo repo. `letmedo --skill` prints this skill.
 
 ## Rules
 
-1. Use `pkexec` for every root command. Never run `sudo` yourself, and never ask the user for a password.
+1. Use `letmedo` for every root command. Never run `sudo` yourself, and never ask the user for a password.
 2. Write `-m` as a claim the user can check against the command: what it does and why the task needs it. "Add the dev hostname to /etc/hosts so the local server resolves" — not "fix it".
-3. Pass the command as plain arguments. The user reads each argument on its own numbered line, so `pkexec -m "…" launchctl bootout system/com.example.helper` is easier to judge than a shell string.
+3. Pass the command as plain arguments. The user reads each argument on its own numbered line, so `letmedo -m "…" launchctl bootout system/com.example.helper` is easier to judge than a shell string.
 4. Use `sh -c '…'` only when the work needs a pipe, a redirect, or several steps. The user sees the script split into numbered lines, and the card flags it as a shell string.
 5. Write to a root-owned file with `tee` on stdin instead of a redirect inside `sh -c`. Stdin passes through to the command:
 
    ```sh
-   printf '127.0.0.1 dev.local\n' | pkexec -m "Map dev.local to localhost for the local server" tee -a /etc/hosts
+   printf '127.0.0.1 dev.local\n' | letmedo -m "Map dev.local to localhost for the local server" tee -a /etc/hosts
    ```
 
 6. Run only non-interactive commands. There is no tty, so a command that prompts will read your stdin or hang.
@@ -32,7 +32,7 @@ The binary lives at `~/.local/bin/pkexec`. When `command -v pkexec` finds nothin
 
 ## Waiting for the user
 
-The window has no timeout. The user may be away, so run `pkexec` with a long tool timeout or in the background. When your tool kills the call, `pkexec` receives SIGTERM. Before approval, `pkexec` treats it as a cancel and exits 126. After approval, `pkexec` passes SIGINT and SIGTERM on to the running command.
+The window has no timeout. The user may be away, so run `letmedo` with a long tool timeout or in the background. When your tool kills the call, `letmedo` receives SIGTERM. Before approval, `letmedo` treats it as a cancel and exits 126. After approval, `letmedo` passes SIGINT and SIGTERM on to the running command.
 
 ## Exit codes
 

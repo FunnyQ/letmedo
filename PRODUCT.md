@@ -14,7 +14,7 @@ Q, on Q's own Mac. Q usually watches an agent work in a terminal and expects a r
 
 ## Product Purpose
 
-`pkexec` lets an AI agent ask to run one command as root and lets Q decide. Success: Q reads exactly what will run, judges it in seconds, and approves with Touch ID or a password, or cancels with Escape.
+`letmedo` lets an AI agent ask to run one command as root and lets Q decide. Success: Q reads exactly what will run, judges it in seconds, and approves with Touch ID or a password, or cancels with Escape.
 
 ## Positioning
 
@@ -22,7 +22,7 @@ The resolved command line is the source of truth. The agent's message is a claim
 
 ## Operating Context
 
-- The agent runs `pkexec -m "why" <cmd> [args...]` from its shell.
+- The agent runs `letmedo -m "why" <cmd> [args...]` from its shell.
 - The confirm window shows the resolved command, the agent's claim, the requester process path, the cwd, and the request time.
 - The password window runs as sudo's askpass program when Touch ID fails.
 - Commands range from short (`dscacheutil -flushcache`) to long argv lists and `sh -c` with a multi-line script.
@@ -34,7 +34,7 @@ The resolved command line is the source of truth. The agent's message is a claim
 - Bind cancel to Escape. Never bind execute to Return.
 - Do not use SwiftUI macros such as `@State`; Command Line Tools lack the macro plugin.
 - Show no anti-phishing phrase; see the threat model in CLAUDE.md.
-- Planned: format and colour the command for reading, and flag risky commands with simple rules in `PkexecCore`.
+- Planned: format and colour the command for reading, and flag risky commands with simple rules in `LetmedoCore`.
 
 ## Product Principles
 

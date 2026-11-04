@@ -1,6 +1,6 @@
 import AppKit
 import Darwin
-import PkexecCore
+import LetmedoCore
 import SwiftUI
 
 func processPath(_ pid: pid_t) -> String {
@@ -10,7 +10,7 @@ func processPath(_ pid: pid_t) -> String {
     return String(decoding: buffer.prefix(Int(length)), as: UTF8.self)
 }
 
-let askpassVariable = "PKEXEC_ASKPASS"
+let askpassVariable = "LETMEDO_ASKPASS"
 let env = ProcessInfo.processInfo.environment
 
 if env[askpassVariable] == "1" {
@@ -52,12 +52,12 @@ guard let executable = resolveExecutable(
     request.command[0], path: env["PATH"] ?? "", cwd: cwd,
     isExecutable: { FileManager.default.isExecutableFile(atPath: $0) })
 else {
-    FileHandle.standardError.write("pkexec: command not found: \(request.command[0])\n".data(using: .utf8)!)
+    FileHandle.standardError.write("letmedo: command not found: \(request.command[0])\n".data(using: .utf8)!)
     exit(127)
 }
 let arguments = Array(request.command.dropFirst())
 
-let queueDir = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Caches/pkexec/queue")
+let queueDir = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Caches/letmedo/queue")
 let ticket = Ticket(time: clock_gettime_nsec_np(CLOCK_REALTIME), pid: getpid())
 let ticketURL = queueDir.appending(path: ticket.name)
 try? FileManager.default.createDirectory(at: queueDir, withIntermediateDirectories: true)
@@ -244,10 +244,10 @@ let outcome = MainActor.assumeIsolated {
 leaveQueue()
 switch outcome {
 case .cancelled:
-    FileHandle.standardError.write("pkexec: cancelled\n".data(using: .utf8)!)
+    FileHandle.standardError.write("letmedo: cancelled\n".data(using: .utf8)!)
     exit(126)
 case .failed:
-    FileHandle.standardError.write("pkexec: authentication failed\n".data(using: .utf8)!)
+    FileHandle.standardError.write("letmedo: authentication failed\n".data(using: .utf8)!)
     exit(126)
 case .authenticated:
     let process = sudoProcess(.run(executable: executable, arguments: arguments), quiet: false)

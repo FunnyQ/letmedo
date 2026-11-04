@@ -4,17 +4,17 @@ Guidance for Claude Code in this repository.
 
 ## What This Is
 
-`pkexec` for macOS: an agent asks to run a command as root, a SwiftUI window shows the human what will run and why, and the human approves with Touch ID or a password. It is for Q's own machine only and is never notarized.
+`letmedo` is a `pkexec` for macOS: an agent asks to run a command as root, a SwiftUI window shows the human what will run and why, and the human approves with Touch ID or a password. It is for Q's own machine only and is never notarized.
 
-- `Sources/PkexecCore/` holds the pure logic: argument parsing, PATH resolution, argv display, and the sudo steps. Every function here is unit-tested.
-- `Sources/pkexec/` holds the windows and the process orchestration. It has no unit tests; verify it end to end with the installed binary.
+- `Sources/LetmedoCore/` holds the pure logic: argument parsing, PATH resolution, argv display, and the sudo steps. Every function here is unit-tested.
+- `Sources/letmedo/` holds the windows and the process orchestration. It has no unit tests; verify it end to end with the installed binary.
 
 ## Commands
 
 ```sh
 make test    # swift test with the Testing macro plugin path
 make build   # release build
-make install # build, then copy to ~/.local/bin/pkexec
+make install # build, then copy to ~/.local/bin/letmedo
 ```
 
 ## Toolchain
@@ -28,7 +28,7 @@ The edit-hook formatter rewrites `\uXXXX` escapes in Swift string literals into 
 
 ## The sudo flow
 
-`pkexec` runs four sudo steps in this order:
+`letmedo` runs four sudo steps in this order:
 
 1. `sudo -k` drops any credential left from before.
 2. `sudo -v` authenticates through Touch ID. When it fails, `sudo -A -v` authenticates through the password window instead.
@@ -42,17 +42,17 @@ Each step exists because of a measured sudo behaviour on macOS:
 - Without a tty, sudo keys its timestamp by parent process. A second process with a different parent cannot reuse the credential, measured with `sudo -v` in one `sh` and `sudo -n true` in another. That is what keeps an agent's shell out of the window between steps 2 and 4.
 - Without a tty, `sudo -k` clears only its own parent's timestamp. Measured with `sudo -v` in one `sh`, `sudo -k` in a second `sh` after the first authenticated, then `sudo -n true` in the first, which still succeeded. That is why one request's steps 1 and 4 cannot break another request's run.
 
-During step 3, `pkexec` ignores SIGINT and SIGTERM itself and sends each one to the sudo process. Foundation's `Process` starts sudo in its own process group, so a kill aimed at the agent's process group never reaches sudo. Sudo relays a signal to the command only when the sender is outside sudo's process group, and `pkexec` is outside it.
+During step 3, `letmedo` ignores SIGINT and SIGTERM itself and sends each one to the sudo process. Foundation's `Process` starts sudo in its own process group, so a kill aimed at the agent's process group never reaches sudo. Sudo relays a signal to the command only when the sender is outside sudo's process group, and `letmedo` is outside it.
 
 ## The queue
 
-Each `pkexec` writes a ticket named `<nanoseconds>-<pid>` to `~/Library/Caches/pkexec/queue/`. A ticket is waiting while it has no `.done` suffix and its pid is alive. A pass waits while any older ticket is waiting. Only the front pass accepts input. Each waiting pass sits 24pt higher per waiting ticket ahead of it, capped at 3.
+Each `letmedo` writes a ticket named `<nanoseconds>-<pid>` to `~/Library/Caches/letmedo/queue/`. A ticket is waiting while it has no `.done` suffix and its pid is alive. A pass waits while any older ticket is waiting. Only the front pass accepts input. Each waiting pass sits 24pt higher per waiting ticket ahead of it, capped at 3.
 
-After the window closes, `pkexec` renames its ticket to `<name>.done`, so a long command does not hold the queue. The badge shows `n / total`: `n` counts the older tickets plus one, and `total` counts every ticket in the directory, done ones included. When no other ticket is waiting, the batch is over. At start, `pkexec` then deletes every ticket except its own. After the window closes, `pkexec` then deletes every ticket, its own included. Both checks also delete tickets left by killed processes.
+After the window closes, `letmedo` renames its ticket to `<name>.done`, so a long command does not hold the queue. The badge shows `n / total`: `n` counts the older tickets plus one, and `total` counts every ticket in the directory, done ones included. When no other ticket is waiting, the batch is over. At start, `letmedo` then deletes every ticket except its own. After the window closes, `letmedo` then deletes every ticket, its own included. Both checks also delete tickets left by killed processes.
 
 ## Window rules
 
-- Use a `.nonactivatingPanel`. `NSApp.activate()` is cooperative and is refused when `pkexec` starts from a background shell, which leaves the window without key focus and breaks Escape.
+- Use a `.nonactivatingPanel`. `NSApp.activate()` is cooperative and is refused when `letmedo` starts from a background shell, which leaves the window without key focus and breaks Escape.
 - Set `hidesOnDeactivate` to false, or the pass disappears when another app takes focus.
 - Let Tab and Space reach the execute button. Q chose this because Touch ID or the password still gates the run, and `/etc/pam.d/sudo_local` holds only `pam_tid`. Revisit if a rule there ever authenticates without a deliberate act, such as `pam_watchid`.
 - Unlock the execute button 0.6s after the pass reaches the front, so a click aimed at another window cannot approve a pass that just appeared.
@@ -63,11 +63,11 @@ SwiftPM writes products to `.build/out/Products/<Debug|Release>/`, not `.build/d
 
 Touch ID needs `auth sufficient pam_tid.so` in `/etc/pam.d/sudo_local`.
 
-The password window runs as sudo's askpass program. `pkexec` sets `SUDO_ASKPASS` to its own path and `PKEXEC_ASKPASS=1`, and the binary enters askpass mode when it sees that variable.
+The password window runs as sudo's askpass program. `letmedo` sets `SUDO_ASKPASS` to its own path and `LETMEDO_ASKPASS=1`, and the binary enters askpass mode when it sees that variable.
 
 ## Threat model
 
-`pkexec` protects Q from an honest but careless agent. It does not protect against a malicious one, and no feature should claim to.
+`letmedo` protects Q from an honest but careless agent. It does not protect against a malicious one, and no feature should claim to.
 
 An anti-phishing phrase stored in the Keychain was built and removed. The agent's terminal holds Screen Recording permission, so a `screencapture` run from the agent's shell captured every window on screen, and any phrase drawn there would be readable. A self-signed binary has no Team ID, so the Keychain bound its ACL to the cdhash and prompted the real binary after every rebuild, the same prompt a fake would raise. A malicious agent can also run `sudo -v` directly and get the same Touch ID prompt with no command attached.
 

@@ -1,5 +1,5 @@
 import AppKit
-import PkexecCore
+import LetmedoCore
 import SwiftUI
 
 enum Palette {

@@ -6,7 +6,7 @@ public struct Request: Equatable {
 }
 
 public struct UsageError: Error, CustomStringConvertible {
-    public let description = "usage: pkexec [-m message] <command> [args...]\n       pkexec --skill"
+    public let description = "usage: letmedo [-m message] <command> [args...]\n       letmedo --skill"
 }
 
 public func parseRequest(_ argv: [String]) throws -> Request {
