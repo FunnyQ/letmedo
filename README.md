@@ -28,6 +28,8 @@ make build    # writes the binary to `swift build -c release --show-bin-path`
 make install  # builds, then copies the binary to ~/.local/bin/pkexec
 ```
 
+The linker signs the binary ad hoc. It has no Team ID and is not notarized, so build it yourself and run it only on your own Mac. Check the signature with `codesign -dv ~/.local/bin/pkexec`, which reports `Signature=adhoc`.
+
 ## Usage
 
 ```sh
